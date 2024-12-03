@@ -19,15 +19,15 @@ def main():
     
     output_dir.mkdir(exist_ok=True)
     
-    # 获取所有jpg图片
-    jpg_files = list(example_dir.glob("*.jpg"))
+    # 获取所有jpg和png图片
+    image_files = list(example_dir.glob("*.jpg")) + list(example_dir.glob("*.png"))
     
-    if not jpg_files:
-        print(f"警告: 在 {example_dir} 中没有找到任何jpg图片")
+    if not image_files:
+        print(f"警告: 在 {example_dir} 中没有找到任何jpg或png图片")
         return
         
-    # 处理目录中的所有jpg图片
-    for img_path in jpg_files:
+    # 处理目录中的所有图片
+    for img_path in image_files:
         out_path = output_dir / f"processed_{img_path.name}"
         print(f"处理: {img_path.name}")
         process_document(str(img_path), str(out_path), show=True)

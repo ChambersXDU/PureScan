@@ -23,12 +23,15 @@ def process_document(input_path, output_path=None, show=False):
     # 执行透视变换
     warped = processor.perspective_transform(image, corners)
     
-    # 图像增强
+    # 先进行图像增强
     enhanced = enhance_image(warped)
+    
+    # 然后再二值化处理
+    binary = processor.binarize(enhanced)
     
     # 保存结果
     if output_path:
-        cv2.imwrite(output_path, enhanced)
+        cv2.imwrite(output_path, binary)
         print(f"处理后的图像已保存到: {output_path}")
     
     return True
