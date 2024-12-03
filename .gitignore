@@ -2,4 +2,6 @@
 
 /test_outputs
 
-*.pyc
+*.pyc*.pyc
+__pycache__/
+.pytest_cache/
