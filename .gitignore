@@ -1,7 +1,34 @@
-*/__pycache__
+
 
 /test_outputs
 
-*.pyc*.pyc
+
+*.pyc
 __pycache__/
 .pytest_cache/
+
+# IDE相关
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 环境相关
+venv/
+env/
+.env
+.python-version
+
+# 系统相关
+.DS_Store
+Thumbs.db
+
+# 日志和临时文件
+*.log
+*.tmp
+*.temp
+
+# 构建和分发相关
+dist/
+build/
+*.egg-info/
