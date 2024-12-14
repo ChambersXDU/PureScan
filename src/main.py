@@ -7,6 +7,7 @@ def main():
     app = QApplication(sys.argv)
     window = MainWindow()
     controller = DocumentController(window)
+    window.controller = controller
     window.show()
     sys.exit(app.exec())
 

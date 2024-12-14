@@ -59,7 +59,7 @@ class ImageProcessor:
         scale_x = imW / IMAGE_SIZE
         scale_y = imH / IMAGE_SIZE
 
-        # 预���理图像
+        # 预处理图像
         image_transformer = self.transformer(image_resize)
         image_transformer = torch.unsqueeze(image_transformer, dim=0)
 

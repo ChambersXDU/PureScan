@@ -12,7 +12,7 @@ class ClickableLabel(QLabel):
     
     def __init__(self, text=""):
         super().__init__(text)
-        self.points = [(50, 50), (250, 50), (250, 350), (50, 350)]
+        self.points = None
         self.selecting_points = False
         self.dragging_point = None
         self.drag_threshold = 20
@@ -80,6 +80,21 @@ class ClickableLabel(QLabel):
                 painter.setBrush(Qt.GlobalColor.red)
                 painter.drawEllipse(ui_point[0]-5, ui_point[1]-5, 10, 10)
 
+    def set_default_points(self):
+        """根据图片尺寸设置默认的选择框位置"""
+        if self.original_size[0] > 0 and self.original_size[1] > 0:
+            width, height = self.original_size
+            # 设置选择框大小为图片尺寸的80%
+            margin_x = width * 0.1  # 左右边距各10%
+            margin_y = height * 0.1  # 上下边距各10%
+            
+            self.points = [
+                (int(margin_x), int(margin_y)),                    # 左上
+                (int(width - margin_x), int(margin_y)),            # 右上
+                (int(width - margin_x), int(height - margin_y)),   # 右下
+                (int(margin_x), int(height - margin_y))            # 左下
+            ]
+
 class MainWindow(QMainWindow):
     # 定义信号
     image_loaded = pyqtSignal(str)  # 发送图片路径
@@ -90,6 +105,7 @@ class MainWindow(QMainWindow):
     
     def __init__(self):
         super().__init__()
+        self.controller = None  # 将在外部设置
         self.setWindowTitle("PureScan")
         self.setMinimumSize(800, 600)
         self.setStyleSheet("background-color: #f0f0f0;")  # 背景色
@@ -328,7 +344,7 @@ class MainWindow(QMainWindow):
         """触发扫描请求"""
         print("Scan button clicked")  # 调试信息
         if self.original_image_label.selecting_points:
-            # 如果在选择模式下，发送当前角点，但保��选择模式
+            # 如果在选择模式下，发送当前角点，但保持选择模式
             self.manual_corners_selected.emit(self.original_image_label.points)
             self.original_image_label.update()  # 更新显示
         self.scan_requested.emit()
@@ -377,6 +393,7 @@ class MainWindow(QMainWindow):
             label.image_offset = (x, y)
             label.original_size = (img_width, img_height)
             label.has_image = True
+            label.set_default_points()
             self.clear_image_btn.show()
         elif label == self.processed_image_label:
             self.save_btn.setEnabled(True)
@@ -405,7 +422,7 @@ class MainWindow(QMainWindow):
             
     def save_processed_image(self):
         """保存处理后的图片"""
-        if self.processed_image_label.pixmap():
+        if hasattr(self, 'controller') and self.controller.processed_result is not None:
             file_name, _ = QFileDialog.getSaveFileName(
                 self,
                 "保存图片",
@@ -413,7 +430,12 @@ class MainWindow(QMainWindow):
                 "图像文件 (*.png *.jpg)"
             )
             if file_name:
-                self.processed_image_label.pixmap().save(file_name)
+                # 使用原始分辨率的处理结果保存
+                if file_name.lower().endswith('.jpg'):
+                    cv2.imwrite(file_name, self.controller.processed_result, 
+                               [cv2.IMWRITE_JPEG_QUALITY, 95])
+                else:
+                    cv2.imwrite(file_name, self.controller.processed_result)
                 self.show_warning("提示", "图片已保存")
 
     def display_image(self, image, label):
@@ -460,6 +482,7 @@ class MainWindow(QMainWindow):
             label.image_offset = (x, y)
             label.original_size = (img_width, img_height)
             label.has_image = True
+            label.set_default_points()
             self.clear_image_btn.show()
         elif label == self.processed_image_label:
             self.save_btn.setEnabled(True)

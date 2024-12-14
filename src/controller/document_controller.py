@@ -9,6 +9,7 @@ class DocumentController(QObject):
         self.view = view
         self.processor = None
         self.manual_corners = None  # 存储手动选择的角点
+        self.processed_result = None  # 存储原始分辨率的处理结果
         
         # 连接信号和槽
         self.view.image_loaded.connect(self.handle_image_load)
@@ -26,25 +27,31 @@ class DocumentController(QObject):
         self.view.scan_btn.setEnabled(True)
         
     def handle_scan_request(self):
-        print("Scan request received")  # 调试信息
         if self.processor is None or self.processor.image is None:
             self.view.show_warning("提示", "请先选择要扫描的图片！")
             return
             
         # 如果有手动选择的角点，直接使用
         if self.manual_corners is not None:
-            print("Using manual corners")  # 调试信息
             warped = self.processor.perspective_transform(self.processor.image, self.manual_corners)
             enhanced = enhance_image(warped)
-            self.view.display_image(enhanced, self.view.processed_image_label)
+            binary = self.processor.binarize(enhanced)
+            
+            # 保存原始分辨率的处理结果
+            self.processed_result = binary
+            # 显示时可能会缩放，但不影响原始图像质量
+            self.view.display_image(binary, self.view.processed_image_label)
             return
             
-        print("Attempting automatic detection")  # 调试信息
         corners = self.processor.detect_document()
         if corners is not None:
             warped = self.processor.perspective_transform(self.processor.image, corners)
             enhanced = enhance_image(warped)
-            self.view.display_image(enhanced, self.view.processed_image_label)
+            binary = self.processor.binarize(enhanced)
+            
+            # 保存原始分辨率的处理结果
+            self.processed_result = binary
+            self.view.display_image(binary, self.view.processed_image_label)
         else:
             if not self.view.original_image_label.selecting_points:
                 self.view.show_warning("提示", "请手动选择文档边框")
@@ -54,30 +61,28 @@ class DocumentController(QObject):
     def handle_manual_corners(self, points):
         """处理手动选择的角点"""
         if self.processor and self.processor.image is not None:
-            print("Original points:", points)  # 打印原始点
-            # 转换点坐标为numpy数组格式
-            points_array = np.array(points)  # 先转换为普通numpy数组
-            self.manual_corners = points_array.reshape(-1, 1, 2).astype(np.float32)
+            print("Original points:", points)
+            points_array = np.array(points, dtype=np.float32)
+            self.manual_corners = points_array
             print("Transformed corners shape:", self.manual_corners.shape)
             print("Transformed corners:", self.manual_corners)
             
-            # 计算目标矩形的宽度和高度
             width = max(
-                np.linalg.norm(points_array[1] - points_array[0]),  # 上边
-                np.linalg.norm(points_array[3] - points_array[2])   # 下边
+                np.linalg.norm(points_array[1] - points_array[0]),
+                np.linalg.norm(points_array[3] - points_array[2])
             )
             height = max(
-                np.linalg.norm(points_array[2] - points_array[1]),  # 右边
-                np.linalg.norm(points_array[3] - points_array[0])   # 左边
+                np.linalg.norm(points_array[2] - points_array[1]),
+                np.linalg.norm(points_array[3] - points_array[0])
             )
-            print(f"Target dimensions: {width} x {height}")  # 打印目标尺寸
+            print(f"Target dimensions: {width} x {height}")
             
-            # 立即进行透视变换
             warped = self.processor.perspective_transform(self.processor.image, self.manual_corners)
             if warped is not None:
-                print("Warped image shape:", warped.shape)  # 打印变换后的图像尺寸
+                print("Warped image shape:", warped.shape)
                 enhanced = enhance_image(warped)
-                self.view.display_image(enhanced, self.view.processed_image_label)
+                binary = self.processor.binarize(enhanced)
+                self.view.display_image(binary, self.view.processed_image_label)
             else:
                 print("Perspective transform failed!")
             
