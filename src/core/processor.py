@@ -11,44 +11,45 @@ class ImageProcessor:
         return self.image
         
     def detect_document(self, image=None):
-        """检测文档边界"""
+        """检测文档边界，如果检测失败返回整个图像的边界"""
         if image is None:
             image = self.image
             
-        # 转换为灰度图
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        
-        # 1. 增强对比度
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
-        gray = clahe.apply(gray)
-        
-        # 2. 使用更大的核进行高斯模糊
-        blur = cv2.GaussianBlur(gray, (5, 5), 0)
-        
-        # 3. 使用更激进的Canny参数
-        edges = cv2.Canny(blur, 30, 200)
-        
-        # 4. 使用膨胀操作连接边缘
-        kernel = np.ones((3,3), np.uint8)
-        edges = cv2.dilate(edges, kernel, iterations=1)
-        
-        # 寻找轮廓
-        contours, _ = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
-        
-        # 5. 调整面��筛选条件
-        if contours:
-            contours = sorted(contours, key=cv2.contourArea, reverse=True)[:5]
+        height, width = image.shape[:2]
+        # 默认使用整个图像的边界
+        default_corners = np.array([
+            [[0, 0]],           # 左上
+            [[width, 0]],       # 右上
+            [[width, height]],  # 右下
+            [[0, height]]       # 左下
+        ], dtype=np.int32)
+
+        try:
+            # 原有的边界检测代码
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+            gray = clahe.apply(gray)
+            blur = cv2.GaussianBlur(gray, (5, 5), 0)
+            edges = cv2.Canny(blur, 30, 200)
+            kernel = np.ones((3,3), np.uint8)
+            edges = cv2.dilate(edges, kernel, iterations=1)
+            contours, _ = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
             
-            for contour in contours:
-                perimeter = cv2.arcLength(contour, True)
-                epsilon = 0.05 * perimeter  # 增加epsilon值，使轮廓近似更宽松
-                approx = cv2.approxPolyDP(contour, epsilon, True)
+            if contours:
+                contours = sorted(contours, key=cv2.contourArea, reverse=True)[:5]
                 
-                # 6. 放宽面积限制条件
-                if len(approx) == 4 and cv2.contourArea(approx) > image.shape[0] * image.shape[1] * 0.05:
-                    return approx
+                for contour in contours:
+                    perimeter = cv2.arcLength(contour, True)
+                    epsilon = 0.05 * perimeter
+                    approx = cv2.approxPolyDP(contour, epsilon, True)
                     
-        return None
+                    if len(approx) == 4 and cv2.contourArea(approx) > image.shape[0] * image.shape[1] * 0.05:
+                        return approx
+        except Exception as e:
+            print(f"边界检测失败: {str(e)}")
+        
+        # 如果检测失败或没有找到合适的边界，返回默认边界
+        return default_corners
         
     def perspective_transform(self, image, corners):
         """执行透视变换"""
@@ -131,3 +132,22 @@ class ImageProcessor:
         angle = 90 if clockwise else -90
         self.image = cv2.rotate(self.image, cv2.ROTATE_90_CLOCKWISE if clockwise else cv2.ROTATE_90_COUNTERCLOCKWISE)
         return self.image
+
+    def process_document(self, image_path):
+        """完整的文档处理流程"""
+        # 加载图像
+        image = self.load_image(image_path)
+        if image is None:
+            raise ValueError("无法加载图像")
+
+        # 检测边界并进行透视变换
+        corners = self.detect_document(image)
+        if corners is not None:
+            transformed = self.perspective_transform(image, corners)
+        else:
+            transformed = image  # 如果没有检测到边界，使用原图
+
+        # 二值化处理
+        binary = self.binarize(transformed)
+        
+        return binary
