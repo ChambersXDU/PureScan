@@ -35,7 +35,7 @@ class ImageProcessor:
         # 寻找轮廓
         contours, _ = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
         
-        # 5. 调整面积筛选条件
+        # 5. 调整面��筛选条件
         if contours:
             contours = sorted(contours, key=cv2.contourArea, reverse=True)[:5]
             
@@ -52,11 +52,28 @@ class ImageProcessor:
         
     def perspective_transform(self, image, corners):
         """执行透视变换"""
+        def order_points(pts):
+            # 初始化坐标点
+            rect = np.zeros((4, 2), dtype="float32")
+            
+            # 计算左上角和右下角
+            s = pts.sum(axis=1)
+            rect[0] = pts[np.argmin(s)]  # 左上
+            rect[2] = pts[np.argmax(s)]  # 右下
+            
+            # 计算右上角和左下角
+            diff = np.diff(pts, axis=1)
+            rect[1] = pts[np.argmin(diff)]  # 右上
+            rect[3] = pts[np.argmax(diff)]  # 左下
+            
+            return rect
+
         # 获取图像尺寸
         h, w = image.shape[:2]
         
         # 确保角点顺序：左上、右上、右下、左下
         corners = corners.reshape(4, 2)
+        corners = order_points(corners)  # 添加这行来排序角点
         
         # 计算目标矩形的宽度和高度
         width = max(
