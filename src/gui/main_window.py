@@ -94,6 +94,20 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(800, 600)
         self.setStyleSheet("background-color: #f0f0f0;")  # 背景色
         
+        # 定义配色方案
+        self.COLORS = {
+            'primary': '#2196F3',    # 主色调，用于扫描按钮
+            'success': '#4CAF50',    # 成功色，用于保存和选择边框按钮
+            'neutral': '#757575',    # 中性色，用于旋转按钮
+            'danger': '#F44336',     # 危险色，用于删除按钮
+            'hover': {
+                'primary': '#1976D2',
+                'success': '#388E3C',
+                'neutral': '#616161',
+                'danger': '#D32F2F'
+            }
+        }
+        
         # 设置中心部件
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
@@ -103,173 +117,185 @@ class MainWindow(QMainWindow):
         self.setup_ui()
         
     def setup_ui(self):
+        # 创建主布局
+        main_layout = QHBoxLayout()
+        main_layout.setSpacing(20)  # 增加组件之间的间距
+        
         # 创建左侧布局（包含原始图像和其控制按钮）
         left_layout = QVBoxLayout()
+        left_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         # 创建图片区域的容器
         image_container = QWidget()
-        image_container_layout = QVBoxLayout(image_container)
-        image_container_layout.setContentsMargins(0, 0, 0, 0)
+        image_container.setFixedSize(400, 500)  # 设置固定大小
         
-        # 添加删除按钮
-        self.clear_image_btn = QPushButton("×")
-        self.clear_image_btn.setFixedSize(30, 30)
-        self.clear_image_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #ff4444;
-                color: white;
-                border-radius: 15px;
-                font-size: 16px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #ff6666;
-            }
-        """)
-        self.clear_image_btn.clicked.connect(self.clear_image)
-        self.clear_image_btn.hide()  # 初始时隐藏
+        # 使用 QVBoxLayout 作为容器的布局
+        container_layout = QVBoxLayout(image_container)
+        container_layout.setContentsMargins(0, 0, 0, 0)
         
-        clear_btn_layout = QHBoxLayout()
-        clear_btn_layout.addStretch()
-        clear_btn_layout.addWidget(self.clear_image_btn)
-        image_container_layout.addLayout(clear_btn_layout)
-        
-        # 原始图像显示区域
+        # 添加图片标签
         self.original_image_label = ClickableLabel("请选择或拖入图片\n支持jpg,png")
-        self.original_image_label.setFixedSize(300, 400)
+        self.original_image_label.setFixedSize(400, 500)
         self.original_image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.original_image_label.setStyleSheet("""
-            border: 2px dashed #ccc;
-            border-radius: 10px;
-            background-color: #fff;
-            color: #666;
-            font-size: 14px;
-            padding: 10px;
+            QLabel {
+                border: 2px dashed #BDBDBD;
+                border-radius: 10px;
+                background-color: white;
+                color: #757575;
+                font-size: 14px;
+                padding: 10px;
+            }
         """)
         self.original_image_label.setAcceptDrops(True)
         self.original_image_label.clicked.connect(self.import_image)
-        self.original_image_label.corners_adjusted.connect(lambda points: self.manual_corners_selected.emit(points))
-        image_container_layout.addWidget(self.original_image_label)
+        self.original_image_label.corners_adjusted.connect(
+            lambda points: self.manual_corners_selected.emit(points)
+        )
         
+        # 创建删除按钮
+        self.clear_image_btn = QPushButton("×")
+        self.clear_image_btn.setFixedSize(16, 16)  # 稍微调小一点
+        self.clear_image_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {self.COLORS['danger']};
+                color: white;
+                border-radius: 8px;
+                font-size: 10px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{ background-color: {self.COLORS['hover']['danger']}; }}
+        """)
+        self.clear_image_btn.clicked.connect(self.clear_image)
+        self.clear_image_btn.hide()
+        
+        # 将图片标签添加到容器
+        container_layout.addWidget(self.original_image_label)
+        
+        # 使用绝对定位放置删除按钮
+        self.clear_image_btn.setParent(image_container)
+        self.clear_image_btn.move(375, 5)  # 放在右上角，留出一些边距
+        
+        # 将图片容器添加到左侧布局
         left_layout.addWidget(image_container)
         
-        # 旋转按钮布局
-        rotate_layout = QHBoxLayout()
-        rotate_layout.setContentsMargins(50, 10, 50, 10)  # 设置边距使按钮居中
+        # 控制按钮布局
+        control_layout = QHBoxLayout()
+        control_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        control_layout.setSpacing(15)  # 增加按钮间距
         
-        # 逆时针旋转按钮
+        # 旋转按钮
         self.rotate_ccw_btn = QPushButton("↺")
-        self.rotate_ccw_btn.setFixedSize(40, 40)
-        self.rotate_ccw_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #666;
-                color: white;
-                border-radius: 20px;
-                font-size: 20px;
-            }
-            QPushButton:hover { background-color: #888; }
-        """)
-        self.rotate_ccw_btn.clicked.connect(lambda: self.rotate_requested.emit(False))
-        
-        # 顺时针旋转按钮
         self.rotate_cw_btn = QPushButton("↻")
-        self.rotate_cw_btn.setFixedSize(40, 40)
-        self.rotate_cw_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #666;
+        rotate_btn_style = f"""
+            QPushButton {{
+                background-color: {self.COLORS['neutral']};
                 color: white;
-                border-radius: 20px;
-                font-size: 20px;
-            }
-            QPushButton:hover { background-color: #888; }
-        """)
+                border-radius: 22px;
+                font-size: 18px;
+                min-width: 44px;
+                min-height: 44px;
+            }}
+            QPushButton:hover {{ background-color: {self.COLORS['hover']['neutral']}; }}
+        """
+        self.rotate_ccw_btn.setStyleSheet(rotate_btn_style)
+        self.rotate_cw_btn.setStyleSheet(rotate_btn_style)
+        
+        self.rotate_ccw_btn.clicked.connect(lambda: self.rotate_requested.emit(False))
         self.rotate_cw_btn.clicked.connect(lambda: self.rotate_requested.emit(True))
         
-        rotate_layout.addWidget(self.rotate_ccw_btn)
-        rotate_layout.addWidget(self.rotate_cw_btn)
-        left_layout.addLayout(rotate_layout)
-        
-        # 主布局调整
-        main_layout = QHBoxLayout()
-        main_layout.addLayout(left_layout)
-        
-        # 扫描按钮
-        self.scan_btn = QPushButton("→")
-        self.scan_btn.setFixedSize(50, 50)
-        self.scan_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #007aff;
-                color: white;
-                border-radius: 25px;
-                font-size: 24px;
-            }
-            QPushButton:hover { background-color: #0066cc; }
-        """)
-        self.scan_btn.clicked.connect(self.scan_document)
-        self.scan_btn.setEnabled(False)  # 初始时禁用
-        
-        scan_layout = QVBoxLayout()
-        scan_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        scan_layout.addWidget(self.scan_btn)
-        main_layout.addLayout(scan_layout)
-        
-        # 创建右侧处理后的图像显示区域
-        self.processed_image_label = QLabel("处理后的图片")
-        self.processed_image_label.setFixedSize(300, 400)
-        self.processed_image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.processed_image_label.setStyleSheet("""
-            border: 2px dashed #ccc;
-            border-radius: 10px;
-            background-color: #fff;
-            color: #666;
-            font-size: 14px;
-            padding: 10px;
-        """)
-        
-        # 右侧处理后的图像区域添加保存按钮
-        right_layout = QVBoxLayout()
-        
-        # 添加保存按钮
-        self.save_btn = QPushButton("保存")
-        self.save_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #28a745;
+        # 手动选择按钮
+        self.manual_select_btn = QPushButton("选择边框")
+        self.manual_select_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {self.COLORS['success']};
                 color: white;
                 border-radius: 5px;
-                padding: 8px 15px;
-                margin: 5px;
-            }
-            QPushButton:hover { background-color: #218838; }
-        """)
-        self.save_btn.clicked.connect(self.save_processed_image)
-        self.save_btn.setEnabled(False)  # 初始时禁用
-        
-        right_layout.addWidget(self.processed_image_label)
-        right_layout.addWidget(self.save_btn)
-        main_layout.addLayout(right_layout)
-        
-        # 手动选点按钮放在底部
-        self.manual_select_btn = QPushButton("手动选择边框")
-        self.manual_select_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #28a745;
-                color: white;
-                border-radius: 5px;
-                padding: 10px;
-                margin: 10px;
-            }
-            QPushButton:hover { background-color: #218838; }
+                padding: 10px 20px;
+                font-size: 14px;
+                min-width: 100px;
+            }}
+            QPushButton:hover {{ background-color: {self.COLORS['hover']['success']}; }}
         """)
         self.manual_select_btn.clicked.connect(self.start_manual_selection)
         
-        # 设置主布局
-        container = QVBoxLayout()
-        container.addLayout(main_layout)
-        container.addWidget(self.manual_select_btn)
+        # 添加按钮到控制布局
+        control_layout.addWidget(self.rotate_ccw_btn)
+        control_layout.addWidget(self.manual_select_btn)
+        control_layout.addWidget(self.rotate_cw_btn)
         
-        # 设置中心部件
+        left_layout.addLayout(control_layout)
+        
+        # 中间的扫描按钮
+        center_layout = QVBoxLayout()
+        center_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        self.scan_btn = QPushButton("→")
+        self.scan_btn.setFixedSize(60, 60)
+        self.scan_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {self.COLORS['primary']};
+                color: white;
+                border-radius: 30px;
+                font-size: 24px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{ background-color: {self.COLORS['hover']['primary']}; }}
+            QPushButton:disabled {{ background-color: #BDBDBD; }}
+        """)
+        self.scan_btn.clicked.connect(self.scan_document)
+        self.scan_btn.setEnabled(False)
+        
+        center_layout.addWidget(self.scan_btn)
+        
+        # 右侧布局
+        right_layout = QVBoxLayout()
+        right_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # 处理后的图像显示区域
+        self.processed_image_label = QLabel("处理后的图片")
+        self.processed_image_label.setFixedSize(400, 500)
+        self.processed_image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.processed_image_label.setStyleSheet("""
+            QLabel {
+                border: 2px solid #BDBDBD;
+                border-radius: 10px;
+                background-color: white;
+                color: #757575;
+                font-size: 14px;
+                padding: 10px;
+            }
+        """)
+        
+        # 保存按钮
+        self.save_btn = QPushButton("保存")
+        self.save_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {self.COLORS['success']};
+                color: white;
+                border-radius: 5px;
+                padding: 10px 30px;
+                font-size: 14px;
+                margin-top: 10px;
+                min-width: 100px;
+            }}
+            QPushButton:hover {{ background-color: {self.COLORS['hover']['success']}; }}
+            QPushButton:disabled {{ background-color: #BDBDBD; }}
+        """)
+        self.save_btn.clicked.connect(self.save_processed_image)
+        self.save_btn.setEnabled(False)
+        
+        right_layout.addWidget(self.processed_image_label)
+        right_layout.addWidget(self.save_btn)
+        
+        # 添加所有布局到主布局
+        main_layout.addLayout(left_layout)
+        main_layout.addLayout(center_layout)
+        main_layout.addLayout(right_layout)
+        
+        # 设置主窗口
         central_widget = QWidget()
-        central_widget.setLayout(container)
+        central_widget.setLayout(main_layout)
         self.setCentralWidget(central_widget)
         
     def dragEnterEvent(self, event: QDragEnterEvent):
@@ -302,7 +328,7 @@ class MainWindow(QMainWindow):
         """触发扫描请求"""
         print("Scan button clicked")  # 调试信息
         if self.original_image_label.selecting_points:
-            # 如果在选择模式下，发送当前角点，但保持选择模式
+            # 如果在选择模式下，发送当前角点，但保��选择模式
             self.manual_corners_selected.emit(self.original_image_label.points)
             self.original_image_label.update()  # 更新显示
         self.scan_requested.emit()
