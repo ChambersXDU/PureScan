@@ -12,18 +12,18 @@ class ImageProcessor:
         self.image = None
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model = None
+        self.model_path = model_path or self.DEFAULT_MODEL_PATH
         self.transformer = transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize(mean=(0.4611, 0.4359, 0.3905), 
                                std=(0.2193, 0.2150, 0.2109))
         ])
         
-        # 如果提供了模型路径，直接加载模型
-        if model_path:
-            self.load_model(model_path)
-        elif os.path.exists(self.DEFAULT_MODEL_PATH):
-            self.load_model(self.DEFAULT_MODEL_PATH)
-        
+    def _ensure_model_loaded(self):
+        """确保模型已加载"""
+        if self.model is None and os.path.exists(self.model_path):
+            self.load_model(self.model_path)
+            
     def load_image(self, image_path):
         """加载图像"""
         self.image = cv2.imread(image_path)
@@ -35,18 +35,24 @@ class ImageProcessor:
             self.model = deeplabv3_mobilenet_v3_large(num_classes=num_classes)
         else:
             self.model = deeplabv3_resnet50(num_classes=num_classes)
+        
+        # 先将模型移到指定设备
         self.model.to(self.device)
+        
+        # 加载权重并确保它们在正确的设备上
         checkpoints = torch.load(model_path, map_location=self.device)
         self.model.load_state_dict(checkpoints, strict=False)
         self.model.eval()
 
     def detect_document(self, image=None):
         """使用深度学习模型检测文档边界"""
+        self._ensure_model_loaded()  # 只在需要时才加载模型
+        
         if image is None:
             image = self.image
-        
+            
         if self.model is None:
-            raise ValueError("请先加载模型")
+            raise ValueError("无法加载模型")
 
         IMAGE_SIZE = 384
         half = IMAGE_SIZE // 2
@@ -62,6 +68,8 @@ class ImageProcessor:
         # 预处理图像
         image_transformer = self.transformer(image_resize)
         image_transformer = torch.unsqueeze(image_transformer, dim=0)
+        # 将输入数据移动到与模型相同的设备上
+        image_transformer = image_transformer.to(self.device)
 
         # 模型推理
         with torch.no_grad():
