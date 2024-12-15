@@ -178,33 +178,46 @@ class ImageProcessor:
         else:
             gray = image
 
-        # 1. 首先进行背景校正
-        # 使用大尺寸高斯模糊获取背景
-        blur_size = max(gray.shape[0], gray.shape[1]) // 8
+        # 根据图像分辨率动态调整参数
+        height, width = gray.shape[:2]
+        min_dim = min(height, width)
+        
+        # 动态调整高斯模糊核大小
+        blur_size = max(min_dim // 8, 3)
         if blur_size % 2 == 0:
             blur_size += 1
-        background = cv2.GaussianBlur(gray, (blur_size, blur_size), 0)
         
-        # 2. 背景减除
+        # 动态调整自适应阈值的块大小
+        block_size = max(min_dim // 30, 11)
+        if block_size % 2 == 0:
+            block_size += 1
+        
+        # 对低分辨率图像进行预处理
+        if min_dim < 1000:
+            # 使用双边滤波来保持边缘的同时减少噪声
+            gray = cv2.bilateralFilter(gray, 9, 75, 75)
+            
+        background = cv2.GaussianBlur(gray, (blur_size, blur_size), 0)
         adjusted = cv2.subtract(255, cv2.subtract(background, gray))
         
-        # 3. 对比度增强
-        alpha = 1.2
-        beta = 10
+        # 根据分辨率调整对比度增强参数
+        alpha = 1.2 if min_dim >= 1000 else 1.4
+        beta = 10 if min_dim >= 1000 else 15
         enhanced = cv2.convertScaleAbs(adjusted, alpha=alpha, beta=beta)
         
-        # 4. 自适应阈值处理
+        # 自适应阈值处理
         binary = cv2.adaptiveThreshold(
             enhanced,
             255,
             cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
             cv2.THRESH_BINARY,
-            blockSize=25,
+            blockSize=block_size,
             C=15
         )
         
-        # 5. 去除噪点
-        kernel = np.ones((2,2), np.uint8)
+        # 根据分辨率调整形态学操作的核大小
+        kernel_size = 2 if min_dim >= 1000 else 1
+        kernel = np.ones((kernel_size, kernel_size), np.uint8)
         denoised = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
         
         return denoised
