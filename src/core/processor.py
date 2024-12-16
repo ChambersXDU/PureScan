@@ -182,7 +182,10 @@ class ImageProcessor:
             image = self.image
             
         if len(image.shape) == 3:
-            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            # 转换为LAB颜色空间并提取L通道
+            lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+            l, a, b = cv2.split(lab)
+            gray = l  # 使用L通道作为灰度图
         else:
             gray = image
 
@@ -190,10 +193,14 @@ class ImageProcessor:
         height, width = gray.shape[:2]
         min_dim = min(height, width)
         
-        # 动态调整高斯模糊核大小
-        blur_size = max(min_dim // 8, 3)
-        if blur_size % 2 == 0:
-            blur_size += 1
+        # Retinex 处理
+        gray_float = gray.astype(np.float32)
+        # 动态调整sigma值，根据图像大小
+        sigma = min_dim // 20  # 或其他合适的比例
+        blur = cv2.GaussianBlur(gray_float, (0, 0), sigma)
+        retinex = gray_float / (blur + 1)
+        # 归一化到0-255
+        retinex = ((retinex - retinex.min()) / (retinex.max() - retinex.min()) * 255).astype(np.uint8)
         
         # 动态调整自适应阈值的块大小
         block_size = max(min_dim // 30, 11)
@@ -203,24 +210,16 @@ class ImageProcessor:
         # 对低分辨率图像进行预处理
         if min_dim < 1000:
             # 使用双边滤波来保持边缘的同时减少噪声
-            gray = cv2.bilateralFilter(gray, 9, 75, 75)
-            
-        background = cv2.GaussianBlur(gray, (blur_size, blur_size), 0)
-        adjusted = cv2.subtract(255, cv2.subtract(background, gray))
-        
-        # 根据分辨率调整对比度增强参数
-        alpha = 1.2 if min_dim >= 1000 else 1.4
-        beta = 10 if min_dim >= 1000 else 15
-        enhanced = cv2.convertScaleAbs(adjusted, alpha=alpha, beta=beta)
+            retinex = cv2.bilateralFilter(retinex, 9, 75, 75)
         
         # 自适应阈值处理
         binary = cv2.adaptiveThreshold(
-            enhanced,
+            retinex,
             255,
             cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
             cv2.THRESH_BINARY,
             blockSize=block_size,
-            C=15
+            C=20
         )
         
         # 根据分辨率调整形态学操作的核大小
