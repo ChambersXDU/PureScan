@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-                             QPushButton, QLabel, QFileDialog, QMessageBox)
+                             QPushButton, QLabel, QFileDialog, QMessageBox, QCheckBox)
 from PyQt6.QtCore import Qt, QMimeData, pyqtSignal
 from PyQt6.QtGui import QImage, QPixmap, QIcon, QDragEnterEvent, QDropEvent, QPainter, QPen
 import cv2
@@ -239,6 +239,11 @@ class MainWindow(QMainWindow):
         control_layout.addWidget(self.rotate_ccw_btn)
         control_layout.addWidget(self.manual_select_btn)
         control_layout.addWidget(self.rotate_cw_btn)
+        
+        # 添加阴影去除复选框
+        self.shadow_removal_cb = QCheckBox("去除阴影")
+        self.shadow_removal_cb.setChecked(False)
+        control_layout.addWidget(self.shadow_removal_cb)
         
         left_layout.addLayout(control_layout)
         

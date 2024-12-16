@@ -3,10 +3,17 @@ import cv2
 from .core.processor import ImageProcessor
 from .core.utils import enhance_image
 
-def process_document(input_path, output_path=None, show=False):
-    """处理单个文档图像"""
+def process_document(input_path, output_path=None, show=False, remove_shadow=False):
+    """处理单个文档图像
+    Args:
+        input_path: 输入图像路径
+        output_path: 输出图像路径
+        show: 是否显示处理过程
+        remove_shadow: 是否启用阴影去除
+    """
     # 初始化处理器
     processor = ImageProcessor()
+    processor.set_shadow_removal(remove_shadow)  # 设置阴影去除选项
     
     # 加载图像
     image = processor.load_image(input_path)
@@ -41,6 +48,8 @@ def main():
     parser.add_argument('input', help='输入图像的路径')
     parser.add_argument('-o', '--output', help='输出图像的路径')
     parser.add_argument('-d', '--debug', action='store_true', help='显示调试信息')
+    parser.add_argument('--remove-shadow', action='store_true', 
+                       help='启用阴影去除')
     
     args = parser.parse_args()
     
@@ -49,7 +58,12 @@ def main():
         if args.output:
             print(f"输出路径: {args.output}")
     
-    success = process_document(args.input, args.output)
+    # 处理图像，传入阴影去除参数
+    success = process_document(
+        args.input, 
+        args.output,
+        remove_shadow=args.remove_shadow
+    )
     
     if not success:
         print("处理失败")

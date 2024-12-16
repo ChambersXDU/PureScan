@@ -31,19 +31,42 @@ def main():
         
     # 处理匹配的图片
     for img_path in image_files:
-        out_path = output_dir / f"processed_{img_path.name}"
-        print(f"处理: {img_path.name}")
+        # 为阴影测试图片创建特殊的输出文件名
+        out_path = output_dir / f"processed_shadow_removed_{img_path.name}"
+        print(f"处理: {img_path.name} (启用阴影去除)")
         
         # 记录开始时间
         start_time = time.time()
         
-        # 处理图片
-        process_document(str(img_path), str(out_path), show=True)
+        # 处理图片，启用阴影去除
+        process_document(
+            str(img_path), 
+            str(out_path), 
+            show=True,
+            remove_shadow=True  # 启用阴影去除
+        )
         
         # 计算处理时间
         end_time = time.time()
         process_time = end_time - start_time
         print(f"处理完成: {img_path.name}, 耗时: {process_time:.2f} 秒")
+        
+        # 同时生成一个不去除阴影的版本作为对比
+        out_path_normal = output_dir / f"processed_shadow_normal_{img_path.name}"
+        print(f"处理: {img_path.name} (不去除阴影)")
+        
+        start_time = time.time()
+        process_document(
+            str(img_path), 
+            str(out_path_normal), 
+            show=True,
+            remove_shadow=False  # 不去除阴影
+        )
+        
+        end_time = time.time()
+        process_time = end_time - start_time
+        print(f"处理完成: {img_path.name}, 耗时: {process_time:.2f} 秒")
+        print("-" * 50)  # 添加分隔线以便于区分不同处理结果
 
 if __name__ == "__main__":
     main() 

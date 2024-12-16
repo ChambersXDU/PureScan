@@ -18,6 +18,7 @@ class ImageProcessor:
             transforms.Normalize(mean=(0.4611, 0.4359, 0.3905), 
                                std=(0.2193, 0.2150, 0.2109))
         ])
+        self.remove_shadow = False  # 添加阴影处理开关
         
     def _ensure_model_loaded(self):
         """确保模型已加载"""
@@ -176,45 +177,49 @@ class ImageProcessor:
         warped = np.clip(warped, 0, 255).astype(np.uint8)
         return warped
 
-    def binarize(self, image=None):
-        """二值化处理"""
+    def binarize(self, image=None, remove_shadow=None):
+        """二值化处理
+        Args:
+            image: 输入图像
+            remove_shadow: 是否去除阴影，如果为None则使用实例默认设置
+        """
         if image is None:
             image = self.image
             
+        if remove_shadow is None:
+            remove_shadow = self.remove_shadow
+            
         if len(image.shape) == 3:
-            # 转换为LAB颜色空间并提取L通道
             lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
             l, a, b = cv2.split(lab)
-            gray = l  # 使用L通道作为灰度图
+            gray = l
         else:
             gray = image
 
-        # 根据图像分辨率动态调整参数
         height, width = gray.shape[:2]
         min_dim = min(height, width)
         
-        # Retinex 处理
-        gray_float = gray.astype(np.float32)
-        # 动态调整sigma值，根据图像大小
-        sigma = min_dim // 20  # 或其他合适的比例
-        blur = cv2.GaussianBlur(gray_float, (0, 0), sigma)
-        retinex = gray_float / (blur + 1)
-        # 归一化到0-255
-        retinex = ((retinex - retinex.min()) / (retinex.max() - retinex.min()) * 255).astype(np.uint8)
+        if remove_shadow:
+            # Retinex 阴影处理
+            gray_float = gray.astype(np.float32)
+            sigma = min_dim // 20
+            blur = cv2.GaussianBlur(gray_float, (0, 0), sigma)
+            retinex = gray_float / (blur + 1)
+            gray = ((retinex - retinex.min()) / 
+                   (retinex.max() - retinex.min()) * 255).astype(np.uint8)
         
-        # 动态调整自适应阈值的块大小
+        # 动态调整参数
         block_size = max(min_dim // 30, 11)
         if block_size % 2 == 0:
             block_size += 1
-        
+            
         # 对低分辨率图像进行预处理
         if min_dim < 1000:
-            # 使用双边滤波来保持边缘的同时减少噪声
-            retinex = cv2.bilateralFilter(retinex, 9, 75, 75)
+            gray = cv2.bilateralFilter(gray, 9, 75, 75)
         
         # 自适应阈值处理
         binary = cv2.adaptiveThreshold(
-            retinex,
+            gray,
             255,
             cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
             cv2.THRESH_BINARY,
@@ -222,7 +227,7 @@ class ImageProcessor:
             C=20
         )
         
-        # 根据分辨率调整形态学操作的核大小
+        # 形态学操作
         kernel_size = 2 if min_dim >= 1000 else 1
         kernel = np.ones((kernel_size, kernel_size), np.uint8)
         denoised = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
@@ -256,3 +261,7 @@ class ImageProcessor:
         binary = self.binarize(transformed)
         
         return binary
+
+    def set_shadow_removal(self, enabled=True):
+        """设置是否启用阴影去除"""
+        self.remove_shadow = enabled
