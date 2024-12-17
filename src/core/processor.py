@@ -200,13 +200,23 @@ class ImageProcessor:
         min_dim = min(height, width)
         
         if remove_shadow:
-            # Retinex 阴影处理
+            # 优化的单尺度 Retinex 处理
             gray_float = gray.astype(np.float32)
+            
+            # 1. 使用稍大的 sigma 值来减少局部噪声
             sigma = min_dim // 20
-            blur = cv2.GaussianBlur(gray_float, (0, 0), sigma)
-            retinex = gray_float / (blur + 1)
-            gray = ((retinex - retinex.min()) / 
-                   (retinex.max() - retinex.min()) * 255).astype(np.uint8)
+            kernel_size = int(sigma * 3) | 1
+            blur = cv2.GaussianBlur(gray_float, (kernel_size, kernel_size), 0)
+            
+            # 2. 调整 Retinex 计算，减少过度增强
+            retinex = np.maximum(gray_float / (blur + 1.0), 0.3)  # 限制最小值
+            
+            # 3. 更温和的归一化
+            retinex = ((retinex - retinex.min()) / 
+                      (retinex.max() - retinex.min()) * 220 + 35)  # 控制动态范围
+            
+            # 4. 轻微的高斯模糊去除噪点
+            gray = cv2.GaussianBlur(retinex.astype(np.uint8), (3, 3), 0)
         
         # 动态调整参数
         block_size = max(min_dim // 30, 11)
