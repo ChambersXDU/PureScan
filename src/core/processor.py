@@ -4,9 +4,11 @@ import torch
 from torchvision import transforms
 from torchvision.models.segmentation import deeplabv3_mobilenet_v3_large, deeplabv3_resnet50
 import os
+from .utils import bilinear_unwarping, load_model  # Add these imports
 
 class ImageProcessor:
     DEFAULT_MODEL_PATH = 'weights/image_trimming_enhancement/model_mbv3_iou_mix_2C049.pth'
+    UNWARP_MODEL_PATH = 'weights/best_model.pkl'  # Add default path for unwarp model
     
     def __init__(self, model_path=None):
         self.image = None
@@ -19,12 +21,22 @@ class ImageProcessor:
                                std=(0.2193, 0.2150, 0.2109))
         ])
         self.remove_shadow = False  # 添加阴影处理开关
+        self.enable_unwarp = False  # 添加扭曲矫正开关
+        self.unwarp_model = None
+        self.unwarp_model_path = self.UNWARP_MODEL_PATH
         
     def _ensure_model_loaded(self):
         """确保模型已加载"""
         if self.model is None and os.path.exists(self.model_path):
             self.load_model(self.model_path)
             
+    def _ensure_unwarp_model_loaded(self):
+        """Ensure unwarp model is loaded"""
+        if self.unwarp_model is None and os.path.exists(self.unwarp_model_path):
+            self.unwarp_model = load_model(self.unwarp_model_path)
+            self.unwarp_model.to(self.device)
+            self.unwarp_model.eval()
+
     def load_image(self, image_path):
         """加载图像"""
         self.image = cv2.imread(image_path)
@@ -253,25 +265,70 @@ class ImageProcessor:
         self.image = cv2.rotate(self.image, cv2.ROTATE_90_CLOCKWISE if clockwise else cv2.ROTATE_90_COUNTERCLOCKWISE)
         return self.image
 
+    def unwarp_document(self, image=None):
+        """Unwarp document using deep learning model"""
+        if image is None:
+            image = self.image
+            
+        self._ensure_unwarp_model_loaded()
+        
+        if self.unwarp_model is None:
+            raise ValueError("Cannot load unwarp model")
+
+        # 使用正确的输入尺寸 [488, 712]
+        IMG_SIZE = (488, 712)  # 可以将这个作为类常量
+        
+        # Preprocess image
+        img_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB).astype(np.float32) / 255
+        inp = torch.from_numpy(cv2.resize(img_rgb, IMG_SIZE).transpose(2, 0, 1)).unsqueeze(0)
+        inp = inp.to(self.device)
+
+        # 确保模型处于评估模式
+        self.unwarp_model.eval()
+        
+        with torch.no_grad():
+            point_positions2D, _ = self.unwarp_model(inp)
+
+        # Unwarp
+        size = image.shape[:2][::-1]
+        unwarped = bilinear_unwarping(
+            warped_img=torch.from_numpy(img_rgb.transpose(2, 0, 1)).unsqueeze(0).to(self.device),
+            point_positions=torch.unsqueeze(point_positions2D[0], dim=0),
+            img_size=tuple(size),
+        )
+        
+        # Post-process
+        unwarped = (unwarped[0].detach().cpu().numpy().transpose(1, 2, 0) * 255).astype(np.uint8)
+        unwarped_bgr = cv2.cvtColor(unwarped, cv2.COLOR_RGB2BGR)
+        
+        return unwarped_bgr
+
     def process_document(self, image_path):
-        """完整的文档处理流程"""
-        # 加载图像
+        """Complete document processing pipeline"""
+        # Load image
         image = self.load_image(image_path)
         if image is None:
-            raise ValueError("无法加载图像")
+            raise ValueError("Cannot load image")
 
-        # 检测边界并进行透视变换
-        corners = self.detect_document(image)
-        if corners is not None:
-            transformed = self.perspective_transform(image, corners)
+        if self.enable_unwarp:
+            # 如果启用扭曲矫正，直接进行矫正
+            unwarped = self.unwarp_document(image)
+            # 直接对矫正后的图像进行二值化
+            binary = self.binarize(unwarped)
         else:
-            transformed = image  # 如果没有检测到边界，使用原图
-
-        # 二值化处理
-        binary = self.binarize(transformed)
+            # 如果不启用扭曲矫正，使用原有的切边流程
+            corners = self.detect_document(image)
+            if corners is None:
+                raise ValueError("Cannot detect document boundaries")
+            transformed = self.perspective_transform(image, corners)
+            binary = self.binarize(transformed)
         
         return binary
 
     def set_shadow_removal(self, enabled=True):
         """设置是否启用阴影去除"""
         self.remove_shadow = enabled
+
+    def set_unwarp(self, enabled=True):
+        """设置是否启用扭曲矫正"""
+        self.enable_unwarp = enabled
