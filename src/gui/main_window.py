@@ -245,6 +245,11 @@ class MainWindow(QMainWindow):
         self.shadow_removal_cb.setChecked(False)
         control_layout.addWidget(self.shadow_removal_cb)
         
+        # 添加扭曲矫正复选框
+        self.unwarp_cb = QCheckBox("扭曲矫正")
+        self.unwarp_cb.setChecked(False)
+        control_layout.addWidget(self.unwarp_cb)
+        
         left_layout.addLayout(control_layout)
         
         # 中间的扫描按钮

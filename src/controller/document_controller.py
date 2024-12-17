@@ -17,6 +17,8 @@ class DocumentController(QObject):
         self.view.rotate_requested.connect(self.handle_rotation)
         self.view.manual_corners_selected.connect(self.handle_manual_corners)
         self.view.image_cleared.connect(self.handle_image_clear)
+        self.view.shadow_removal_cb.stateChanged.connect(self.handle_shadow_removal_change)
+        self.view.unwarp_cb.stateChanged.connect(self.handle_unwarp_change)
         
     def handle_image_load(self, file_path):
         if self.processor is None:
@@ -31,33 +33,15 @@ class DocumentController(QObject):
             self.view.show_warning("提示", "请先选择要扫描的图片！")
             return
             
-        # 如果有手动选择的角点，直接使用
-        if self.manual_corners is not None:
-            warped = self.processor.perspective_transform(self.processor.image, self.manual_corners)
-            enhanced = enhance_image(warped)
-            binary = self.processor.binarize(enhanced)
-            
-            # 保存原始分辨率的处理结果
-            self.processed_result = binary
-            # 显示时可能会缩放，但不影响原始图像质量
-            self.view.display_image(binary, self.view.processed_image_label)
-            return
-            
-        corners = self.processor.detect_document()
-        if corners is not None:
-            warped = self.processor.perspective_transform(self.processor.image, corners)
-            enhanced = enhance_image(warped)
-            binary = self.processor.binarize(enhanced)
-            
-            # 保存原始分辨率的处理结果
+        try:
+            binary = self.processor.process_document(None)  # 确保传递 None
+            # 保存和显示处理结果
             self.processed_result = binary
             self.view.display_image(binary, self.view.processed_image_label)
-        else:
-            if not self.view.original_image_label.selecting_points:
-                self.view.show_warning("提示", "请手动选择文档边框")
-                self.view.original_image_label.selecting_points = True
-                self.view.original_image_label.update()
             
+        except Exception as e:
+            self.view.show_warning("处理错误", f"处理过程中出现错误: {str(e)}")
+        
     def handle_manual_corners(self, points):
         """处理手动选择的角点"""
         if self.processor and self.processor.image is not None:
@@ -98,3 +82,13 @@ class DocumentController(QObject):
             self.view.display_image(rotated, self.view.original_image_label)
             # 清除已存储的手动角点，因为图片已旋转
             self.manual_corners = None
+            
+    def handle_shadow_removal_change(self, state):
+        """处理阴影去除开关状态改变"""
+        if self.processor:
+            self.processor.set_shadow_removal(state == 2)  # 2 表示选中状态
+            
+    def handle_unwarp_change(self, state):
+        """处理扭曲矫正开关状态改变"""
+        if self.processor:
+            self.processor.set_unwarp(state == 2)  # 2 表示选中状态

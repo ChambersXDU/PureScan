@@ -303,12 +303,17 @@ class ImageProcessor:
         
         return unwarped_bgr
 
-    def process_document(self, image_path):
+    def process_document(self, image_path=None):
         """Complete document processing pipeline"""
-        # Load image
-        image = self.load_image(image_path)
-        if image is None:
-            raise ValueError("Cannot load image")
+        # Load image if path is provided
+        if image_path:
+            image = self.load_image(image_path)
+            if image is None:
+                raise ValueError("Cannot load image")
+        else:
+            image = self.image
+            if image is None:
+                raise ValueError("Image not loaded")
 
         if self.enable_unwarp:
             # 如果启用扭曲矫正，直接进行矫正
